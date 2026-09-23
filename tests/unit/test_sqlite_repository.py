@@ -5,6 +5,7 @@ knows nothing about HTTP or business rules. These tests define what any implemen
 must do, so a future backend (e.g. Postgres) should pass the same tests unchanged.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 import pytest
@@ -117,3 +118,16 @@ def test_add_rejects_naive_datetimes(repo):
 
     with pytest.raises(ValueError):
         repo.add(naive)
+
+
+def test_next_id_returns_an_increasing_sequence_starting_at_one(repo):
+    assert [repo.next_id(), repo.next_id(), repo.next_id()] == [1, 2, 3]
+
+
+def test_next_id_is_unique_across_concurrent_callers(repo):
+    # The API serves requests on multiple threads, so no two callers may ever be
+    # handed the same id, otherwise two links could receive the same short code.
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        ids = list(pool.map(lambda _: repo.next_id(), range(50)))
+
+    assert len(set(ids)) == 50

@@ -38,6 +38,9 @@ class UrlRepository(Protocol):
     def get(self, code: str) -> UrlRecord | None:
         """Return the record for `code`, or None if it does not exist."""
 
+    def next_id(self) -> int:
+        """Return the next unique integer (1, 2, 3, ...), safe under concurrent callers."""
+
     def record_click(self, code: str, at: datetime) -> None:
         """Atomically add one click and set last_accessed_at. No-op for unknown codes."""
 
@@ -49,6 +52,14 @@ CREATE TABLE IF NOT EXISTS urls (
     created_at       TEXT NOT NULL,               -- ISO-8601, timezone-aware
     click_count      INTEGER NOT NULL DEFAULT 0,
     last_accessed_at TEXT
+)
+"""
+
+# A table whose only job is to hand out unique, increasing integers. AUTOINCREMENT
+# guarantees an id is never reused, even after a crash.
+_COUNTER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS id_counter (
+    id INTEGER PRIMARY KEY AUTOINCREMENT
 )
 """
 
@@ -67,6 +78,7 @@ class SqliteUrlRepository:
         self._lock = threading.Lock()
         with self._lock, self._conn:
             self._conn.execute(_SCHEMA)
+            self._conn.execute(_COUNTER_SCHEMA)
 
     def add(self, record: UrlRecord) -> None:
         # Naive datetimes are ambiguous once stored as text, so reject them early.
@@ -106,6 +118,15 @@ class SqliteUrlRepository:
             click_count=row[3],
             last_accessed_at=datetime.fromisoformat(row[4]) if row[4] else None,
         )
+
+    def next_id(self) -> int:
+        # Inserting a row makes SQLite assign the next id atomically; the lock and the
+        # transaction ensure two threads can never receive the same number. If the
+        # process crashes before the id is used, that number is skipped, which is
+        # harmless because codes only need to be unique, not gap-free.
+        with self._lock, self._conn:
+            cursor = self._conn.execute("INSERT INTO id_counter DEFAULT VALUES")
+            return cursor.lastrowid
 
     def record_click(self, code: str, at: datetime) -> None:
         _require_timezone(at)

@@ -8,3 +8,11 @@ independent of the web framework.
 
 class DuplicateCodeError(Exception):
     """Raised when a short code is already in use."""
+
+
+class InvalidUrlError(Exception):
+    """Raised when a long URL breaks one of the validation rules."""
+
+
+class CodeGenerationError(Exception):
+    """Raised when a free short code could not be found within the retry limit."""
