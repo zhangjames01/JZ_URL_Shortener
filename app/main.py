@@ -1,12 +1,23 @@
 """Application wiring: build the object graph (repository -> service -> routes)."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.error_handlers import register_error_handlers
 from app.api.routes import build_redirect_router, build_router
 from app.config import Settings
-from app.repository import SqliteUrlRepository
+from app.postgres_repository import PostgresUrlRepository
+from app.repository import SqliteUrlRepository, UrlRepository
 from app.service import ShortenerService
+
+
+def build_repository(settings: Settings) -> UrlRepository:
+    """Use PostgreSQL when DATABASE_URL is set (production), otherwise a local SQLite file."""
+    if settings.database_url:
+        return PostgresUrlRepository(settings.database_url)
+    return SqliteUrlRepository(settings.database_path)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -17,10 +28,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     settings = settings or Settings.from_env()
 
-    repository = SqliteUrlRepository(settings.database_path)
+    repository = build_repository(settings)
     service = ShortenerService(repository)
 
-    app = FastAPI(title="URL Shortener")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        # Runs at shutdown: release database connections cleanly.
+        repository.close()
+
+    app = FastAPI(title="URL Shortener", lifespan=lifespan)
     app.include_router(build_router(service, settings.base_url))
     register_error_handlers(app)
 

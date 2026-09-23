@@ -44,6 +44,9 @@ class UrlRepository(Protocol):
     def record_click(self, code: str, at: datetime) -> None:
         """Atomically add one click and set last_accessed_at. No-op for unknown codes."""
 
+    def close(self) -> None:
+        """Release connections and other resources. Called once at application shutdown."""
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS urls (
@@ -82,8 +85,8 @@ class SqliteUrlRepository:
 
     def add(self, record: UrlRecord) -> None:
         # Naive datetimes are ambiguous once stored as text, so reject them early.
-        _require_timezone(record.created_at)
-        _require_timezone(record.last_accessed_at)
+        require_timezone(record.created_at)
+        require_timezone(record.last_accessed_at)
         try:
             # `with self._conn` wraps the statement in a transaction (commit or rollback).
             with self._lock, self._conn:
@@ -128,8 +131,12 @@ class SqliteUrlRepository:
             cursor = self._conn.execute("INSERT INTO id_counter DEFAULT VALUES")
             return cursor.lastrowid
 
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
     def record_click(self, code: str, at: datetime) -> None:
-        _require_timezone(at)
+        require_timezone(at)
         # Single UPDATE so the increment is atomic. Reading the count in Python and
         # writing it back would lose clicks when requests overlap.
         with self._lock, self._conn:
@@ -140,7 +147,8 @@ class SqliteUrlRepository:
             )
 
 
-def _require_timezone(value: datetime | None) -> None:
+def require_timezone(value: datetime | None) -> None:
+    """Reject naive datetimes: without a timezone the instant they mean is ambiguous."""
     if value is not None and value.tzinfo is None:
         raise ValueError("datetime must be timezone-aware")
 

@@ -1,8 +1,10 @@
-"""Contract tests for the URL repository.
+"""Contract tests for the URL repository, run against every storage backend.
 
 The repository is the storage layer: it saves, fetches and updates URL records and
-knows nothing about HTTP or business rules. These tests define what any implementation
-must do, so a future backend (e.g. Postgres) should pass the same tests unchanged.
+knows nothing about HTTP or business rules. Every implementation must pass exactly the
+same tests, which is what makes swapping backends safe. The `repo` fixture below runs
+each test once per backend; the Postgres run is skipped when no test database is
+configured (see `postgres_dsn` in conftest.py).
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -18,15 +20,20 @@ CREATED_AT = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 CLICKED_AT = datetime(2026, 1, 2, 9, 30, tzinfo=UTC)
 
 
-@pytest.fixture
-def repo():
-    """A new, empty repository for every test.
+@pytest.fixture(params=["sqlite", "postgres"])
+def repo(request):
+    """A new, empty repository for every test, once per backend.
 
-    ":memory:" makes SQLite keep the database in RAM and discard it afterwards, so
-    tests cannot leak state into each other. It is fast and still enforces the real
-    PRIMARY KEY constraint, which a plain dict would not.
+    SQLite uses ":memory:", so the database lives in RAM and vanishes afterwards and
+    tests cannot leak state into each other. Postgres uses a disposable test database
+    that is wiped before each test.
     """
-    return SqliteUrlRepository(":memory:")
+    if request.param == "sqlite":
+        repository = SqliteUrlRepository(":memory:")
+    else:
+        repository = request.getfixturevalue("postgres_repo")
+    yield repository
+    repository.close()
 
 
 def make_record(code="abc123", url="https://example.com/a"):
@@ -131,3 +138,14 @@ def test_next_id_is_unique_across_concurrent_callers(repo):
         ids = list(pool.map(lambda _: repo.next_id(), range(50)))
 
     assert len(set(ids)) == 50
+
+
+def test_concurrent_clicks_are_all_counted(repo):
+    # The API serves requests on several threads at once. The increment must be atomic,
+    # otherwise two overlapping clicks could both read N and both write N + 1.
+    repo.add(make_record())
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(lambda _: repo.record_click("abc123", at=CLICKED_AT), range(50)))
+
+    assert repo.get("abc123").click_count == 50

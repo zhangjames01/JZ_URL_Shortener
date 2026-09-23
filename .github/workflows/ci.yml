@@ -9,6 +9,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    # A throwaway PostgreSQL for the Postgres repository tests.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: url_shortener_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/url_shortener_test
+      # Fail, instead of skip, if the database is unavailable, so the Postgres tests
+      # cannot silently stop running.
+      REQUIRE_POSTGRES: "1"
+
     steps:
       - uses: actions/checkout@v4
 
