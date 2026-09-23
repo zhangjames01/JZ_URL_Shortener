@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.errors import InvalidUrlError
+from app.errors import AliasTakenError, InvalidAliasError, InvalidUrlError
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,14 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(InvalidUrlError)
     async def invalid_url(_: Request, exc: InvalidUrlError) -> JSONResponse:
         return _error(422, "INVALID_URL", str(exc))
+
+    @app.exception_handler(InvalidAliasError)
+    async def invalid_alias(_: Request, exc: InvalidAliasError) -> JSONResponse:
+        return _error(422, "INVALID_ALIAS", str(exc))
+
+    @app.exception_handler(AliasTakenError)
+    async def alias_taken(_: Request, exc: AliasTakenError) -> JSONResponse:
+        return _error(409, "ALIAS_TAKEN", f"Alias '{exc}' is already in use")
 
     # Overrides FastAPI's default 422 body (a list of objects) so clients only ever
     # have to handle a single error shape.

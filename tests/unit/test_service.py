@@ -3,10 +3,10 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.service import MAX_CODE_ATTEMPTS, ShortenerService
 
-from app.errors import CodeGenerationError, InvalidUrlError
+from app.errors import AliasTakenError, CodeGenerationError, InvalidAliasError, InvalidUrlError
 from app.repository import SqliteUrlRepository, UrlRecord
+from app.service import MAX_CODE_ATTEMPTS, ShortenerService
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 URL = "https://example.com/page"
@@ -70,3 +70,56 @@ def test_create_gives_up_after_too_many_consecutive_collisions(service, repo):
 
     with pytest.raises(CodeGenerationError):
         service.create(URL)
+
+
+# --- custom aliases ---
+
+
+def test_create_with_alias_uses_the_alias_as_the_code(service, repo):
+    record = service.create(URL, alias="promo")
+
+    assert record == UrlRecord(code="promo", original_url=URL, created_at=NOW)
+    assert repo.get("promo") == record
+
+
+def test_create_without_alias_behaves_as_before(service):
+    assert service.create(URL, alias=None).code == "1000000"
+
+
+def test_alias_does_not_consume_a_counter_value(service):
+    # Custom links must not leave gaps in the generated sequence.
+    service.create(URL, alias="promo")
+
+    assert service.create(URL).code == "1000000"
+
+
+def test_taken_alias_is_rejected_and_the_original_is_kept(service, repo):
+    service.create("https://first.example", alias="promo")
+
+    with pytest.raises(AliasTakenError):
+        service.create("https://second.example", alias="promo")
+
+    assert repo.get("promo").original_url == "https://first.example"
+
+
+def test_invalid_alias_is_rejected_and_nothing_is_stored(service, repo):
+    with pytest.raises(InvalidAliasError):
+        service.create(URL, alias="no spaces allowed")
+
+    assert repo.get("no spaces allowed") is None
+
+
+def test_invalid_url_with_a_valid_alias_leaves_the_alias_free(service, repo):
+    # Everything is validated before anything is written.
+    with pytest.raises(InvalidUrlError):
+        service.create("ftp://example.com", alias="promo")
+
+    assert repo.get("promo") is None
+    assert service.create(URL, alias="promo").code == "promo"
+
+
+def test_alias_matching_a_future_generated_code_is_skipped_by_the_counter(service):
+    # Someone claims exactly the code the counter would produce next.
+    service.create(URL, alias="1000000")
+
+    assert service.create(URL).code == "1000001"

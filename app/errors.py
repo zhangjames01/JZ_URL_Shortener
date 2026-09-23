@@ -16,3 +16,11 @@ class InvalidUrlError(Exception):
 
 class CodeGenerationError(Exception):
     """Raised when a free short code could not be found within the retry limit."""
+
+
+class InvalidAliasError(Exception):
+    """Raised when a custom alias breaks one of the alias rules."""
+
+
+class AliasTakenError(Exception):
+    """Raised when a requested custom alias is already in use."""

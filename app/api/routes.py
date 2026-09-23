@@ -14,7 +14,7 @@ def build_router(service: ShortenerService, base_url: str) -> APIRouter:
     # this handler in its threadpool instead of stalling the event loop.
     @router.post("/api/v1/urls", status_code=201, response_model=UrlResponse)
     def create_url(body: CreateUrlRequest) -> UrlResponse:
-        record = service.create(body.url)
+        record = service.create(body.url, body.alias)
         return UrlResponse(
             code=record.code,
             short_url=f"{base_url}/{record.code}",

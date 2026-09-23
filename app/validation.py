@@ -5,9 +5,10 @@ and reuse. The request schema only checks that the field is a string; this modul
 decides whether that string is acceptable.
 """
 
+import re
 from urllib.parse import urlsplit
 
-from app.errors import InvalidUrlError
+from app.errors import InvalidAliasError, InvalidUrlError
 
 # Practical upper bound for URLs; also limits how much a single request can store.
 MAX_URL_LENGTH = 2048
@@ -48,3 +49,33 @@ def validate_long_url(url: str) -> str:
         raise InvalidUrlError("URL must not contain credentials")
 
     return url
+
+
+MIN_ALIAS_LENGTH = 3
+MAX_ALIAS_LENGTH = 32
+
+# ASCII letters and digits only. `str.isalnum()` is avoided on purpose because it also
+# accepts accented and non-Latin characters.
+_ALIAS_PATTERN = re.compile(rf"[A-Za-z0-9]{{{MIN_ALIAS_LENGTH},{MAX_ALIAS_LENGTH}}}")
+
+# Aliases are served from the site root (/{alias}), so they must not shadow the
+# service's own top-level routes. If you add a new root-level route, add its first path
+# segment here; tests/integration/test_reserved_aliases.py fails if you forget.
+RESERVED_ALIASES = frozenset({"api", "healthz", "docs", "redoc"})
+
+
+def validate_alias(alias: str) -> str:
+    """Return `alias` unchanged if it is acceptable, otherwise raise InvalidAliasError.
+
+    Aliases are case-sensitive and are not trimmed: a value with stray spaces is
+    rejected rather than silently altered.
+    """
+    # fullmatch (not match/$) so a trailing newline cannot slip through.
+    if not _ALIAS_PATTERN.fullmatch(alias):
+        raise InvalidAliasError(
+            f"Alias must be {MIN_ALIAS_LENGTH}-{MAX_ALIAS_LENGTH} letters or digits (a-z, A-Z, 0-9)"
+        )
+    # Reserved words are compared ignoring case so "API" cannot pass as our own route.
+    if alias.lower() in RESERVED_ALIASES:
+        raise InvalidAliasError(f"Alias '{alias}' is reserved")
+    return alias

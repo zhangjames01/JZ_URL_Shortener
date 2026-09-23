@@ -8,6 +8,8 @@ from pydantic import BaseModel
 class CreateUrlRequest(BaseModel):
     # Only the shape is checked here; the business rules live in app.validation.
     url: str
+    # Optional custom short code. None means "generate one for me".
+    alias: str | None = None
 
 
 class UrlResponse(BaseModel):

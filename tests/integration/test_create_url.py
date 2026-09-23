@@ -55,3 +55,68 @@ def test_malformed_json_uses_the_same_error_envelope(client):
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+# --- custom aliases ---
+
+
+def test_create_with_alias_returns_it_as_the_code(client):
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": "promo"})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["code"] == "promo"
+    assert body["short_url"] == f"{TEST_BASE_URL}/promo"
+
+
+def test_null_alias_means_auto_generate(client):
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": None})
+
+    assert response.status_code == 201
+    assert response.json()["code"] == "1000000"
+
+
+def test_taken_alias_returns_409(client):
+    client.post("/api/v1/urls", json={"url": URL, "alias": "promo"})
+
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": "promo"})
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "ALIAS_TAKEN"
+
+
+def test_invalid_alias_returns_422(client):
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": "no spaces"})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_ALIAS"
+
+
+def test_reserved_alias_returns_422(client):
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": "api"})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_ALIAS"
+
+
+def test_empty_alias_is_invalid_not_absent(client):
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": ""})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_ALIAS"
+
+
+def test_non_string_alias_is_a_validation_error(client):
+    response = client.post("/api/v1/urls", json={"url": URL, "alias": 123})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_alias_equal_to_the_next_generated_code_does_not_break_generation(client):
+    client.post("/api/v1/urls", json={"url": URL, "alias": "1000000"})
+
+    response = client.post("/api/v1/urls", json={"url": URL})
+
+    assert response.status_code == 201
+    assert response.json()["code"] == "1000001"
