@@ -16,6 +16,9 @@ def test_create_returns_201_with_the_link_details(client):
     assert body["short_url"] == f"{TEST_BASE_URL}/1000000"
     assert body["original_url"] == URL
     datetime.fromisoformat(body["created_at"])  # must be a valid ISO-8601 timestamp
+    # Create and metadata share one response shape, so a new link already reports stats.
+    assert body["click_count"] == 0
+    assert body["last_accessed_at"] is None
 
 
 def test_each_create_gets_a_new_code(client):

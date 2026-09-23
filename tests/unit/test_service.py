@@ -201,3 +201,42 @@ def test_a_click_tracking_failure_is_logged_but_never_blocks_the_redirect(repo, 
 
     assert result == URL
     assert "analytics storage is down" in caplog.text
+
+
+# --- reading link metadata ---
+
+
+def test_get_link_returns_the_stored_record(service):
+    created = service.create(URL)
+    aliased = service.create(URL, alias="promo")
+
+    assert service.get_link(created.code) == created
+    assert service.get_link("promo") == aliased
+
+
+def test_get_link_unknown_code_raises_not_found(service):
+    with pytest.raises(NotFoundError):
+        service.get_link("nope123")
+
+
+def test_get_link_does_not_count_as_a_click(service):
+    # Only a real visit (the redirect) is a click; looking at stats must not inflate them.
+    record = service.create(URL)
+
+    service.get_link(record.code)
+    service.get_link(record.code)
+
+    stored = service.get_link(record.code)
+    assert stored.click_count == 0
+    assert stored.last_accessed_at is None
+
+
+def test_get_link_reflects_recorded_visits(service):
+    record = service.create(URL)
+    service.visit(record.code)
+    service.visit(record.code)
+
+    stored = service.get_link(record.code)
+
+    assert stored.click_count == 2
+    assert stored.last_accessed_at == NOW

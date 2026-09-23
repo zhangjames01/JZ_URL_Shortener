@@ -75,14 +75,22 @@ class ShortenerService:
 
         raise CodeGenerationError(f"no free short code after {MAX_CODE_ATTEMPTS} attempts")
 
-    def visit(self, code: str) -> str:
-        """Return the destination for `code` and count the visit as a click.
+    def get_link(self, code: str) -> UrlRecord:
+        """Return the stored record for `code` without counting it as a visit.
 
         Raises NotFoundError if the code does not exist.
         """
         record = self._repository.get(code)
         if record is None:
             raise NotFoundError(code)
+        return record
+
+    def visit(self, code: str) -> str:
+        """Return the destination for `code` and count the visit as a click.
+
+        Raises NotFoundError if the code does not exist.
+        """
+        record = self.get_link(code)
 
         try:
             self._repository.record_click(code, at=self._clock())

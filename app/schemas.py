@@ -17,3 +17,5 @@ class UrlResponse(BaseModel):
     short_url: str
     original_url: str
     created_at: datetime
+    click_count: int
+    last_accessed_at: datetime | None
