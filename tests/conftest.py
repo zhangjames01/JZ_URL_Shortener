@@ -1,9 +1,9 @@
 """Shared fixtures for unit and integration tests."""
 
 import pytest
-from app.config import Settings
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.main import create_app
 
 TEST_BASE_URL = "https://sho.rt"

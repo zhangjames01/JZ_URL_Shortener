@@ -1,6 +1,7 @@
 """Tests for base62 encoding (alphabet order: 0-9, a-z, A-Z)."""
 
 import pytest
+
 from app.base62 import encode
 
 

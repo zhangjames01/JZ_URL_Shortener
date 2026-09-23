@@ -1,9 +1,9 @@
 """Tests for long-URL validation rules."""
 
 import pytest
-from app.validation import MAX_URL_LENGTH, validate_long_url
 
 from app.errors import InvalidUrlError
+from app.validation import MAX_URL_LENGTH, validate_long_url
 
 _PREFIX = "https://example.com/"
 
