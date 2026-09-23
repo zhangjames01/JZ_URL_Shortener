@@ -4,13 +4,21 @@ The service owns the rules (validate, generate a code, handle collisions). It ta
 storage only through the `UrlRepository` interface and knows nothing about HTTP.
 """
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.codegen import code_for_id
-from app.errors import AliasTakenError, CodeGenerationError, DuplicateCodeError
+from app.errors import (
+    AliasTakenError,
+    CodeGenerationError,
+    DuplicateCodeError,
+    NotFoundError,
+)
 from app.repository import UrlRecord, UrlRepository
 from app.validation import validate_alias, validate_long_url
+
+logger = logging.getLogger(__name__)
 
 # How many counter values to try before giving up. A generated code can only collide
 # with a code someone claimed earlier (e.g. a custom alias), so needing more than a
@@ -66,3 +74,21 @@ class ShortenerService:
             return record
 
         raise CodeGenerationError(f"no free short code after {MAX_CODE_ATTEMPTS} attempts")
+
+    def visit(self, code: str) -> str:
+        """Return the destination for `code` and count the visit as a click.
+
+        Raises NotFoundError if the code does not exist.
+        """
+        record = self._repository.get(code)
+        if record is None:
+            raise NotFoundError(code)
+
+        try:
+            self._repository.record_click(code, at=self._clock())
+        except Exception:
+            # Deliberately broad: analytics are secondary to the redirect. If counting
+            # fails for any reason, log it and still send the visitor on their way.
+            logger.exception("Failed to record click for code %s", code)
+
+        return record.original_url

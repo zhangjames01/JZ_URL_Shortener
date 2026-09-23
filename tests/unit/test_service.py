@@ -1,10 +1,17 @@
 """Tests for the shortener service (business rules), using a real in-memory repository."""
 
+import logging
 from datetime import UTC, datetime
 
 import pytest
 
-from app.errors import AliasTakenError, CodeGenerationError, InvalidAliasError, InvalidUrlError
+from app.errors import (
+    AliasTakenError,
+    CodeGenerationError,
+    InvalidAliasError,
+    InvalidUrlError,
+    NotFoundError,
+)
 from app.repository import SqliteUrlRepository, UrlRecord
 from app.service import MAX_CODE_ATTEMPTS, ShortenerService
 
@@ -123,3 +130,74 @@ def test_alias_matching_a_future_generated_code_is_skipped_by_the_counter(servic
     service.create(URL, alias="1000000")
 
     assert service.create(URL).code == "1000001"
+
+
+# --- visiting a link (redirect + click tracking) ---
+
+
+def test_visit_returns_the_original_url_for_a_generated_code(service):
+    record = service.create(URL)
+
+    assert service.visit(record.code) == URL
+
+
+def test_visit_returns_the_original_url_for_a_custom_alias(service):
+    service.create(URL, alias="promo")
+
+    assert service.visit("promo") == URL
+
+
+def test_visit_unknown_code_raises_not_found(service):
+    with pytest.raises(NotFoundError):
+        service.visit("nope123")
+
+
+def test_visit_records_a_click_with_the_current_time(service, repo):
+    record = service.create(URL)
+
+    service.visit(record.code)
+
+    stored = repo.get(record.code)
+    assert stored.click_count == 1
+    assert stored.last_accessed_at == NOW
+
+
+def test_each_visit_adds_one_click(service, repo):
+    record = service.create(URL)
+
+    service.visit(record.code)
+    service.visit(record.code)
+
+    assert repo.get(record.code).click_count == 2
+
+
+def test_visiting_an_unknown_code_creates_no_record(service, repo):
+    with pytest.raises(NotFoundError):
+        service.visit("nope123")
+
+    assert repo.get("nope123") is None
+
+
+class _RepoWithBrokenClickTracking:
+    """Delegates to a real repository, but click recording always fails."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def record_click(self, code, at):
+        raise RuntimeError("analytics storage is down")
+
+
+def test_a_click_tracking_failure_is_logged_but_never_blocks_the_redirect(repo, caplog):
+    # Analytics are secondary: the visitor must still reach their destination.
+    service = ShortenerService(_RepoWithBrokenClickTracking(repo), clock=lambda: NOW)
+    record = service.create(URL)
+
+    with caplog.at_level(logging.ERROR):
+        result = service.visit(record.code)
+
+    assert result == URL
+    assert "analytics storage is down" in caplog.text

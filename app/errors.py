@@ -24,3 +24,7 @@ class InvalidAliasError(Exception):
 
 class AliasTakenError(Exception):
     """Raised when a requested custom alias is already in use."""
+
+
+class NotFoundError(Exception):
+    """Raised when no short link exists for the requested code."""

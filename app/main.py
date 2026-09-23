@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.error_handlers import register_error_handlers
-from app.api.routes import build_router
+from app.api.routes import build_redirect_router, build_router
 from app.config import Settings
 from app.repository import SqliteUrlRepository
 from app.service import ShortenerService
@@ -27,5 +27,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    # Must be registered last: "/{code}" matches any single path segment, so adding it
+    # earlier would shadow /healthz and the framework's /docs and /redoc.
+    app.include_router(build_redirect_router(service))
 
     return app

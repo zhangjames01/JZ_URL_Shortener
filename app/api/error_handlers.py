@@ -11,10 +11,17 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.errors import AliasTakenError, InvalidAliasError, InvalidUrlError
+from app.errors import AliasTakenError, InvalidAliasError, InvalidUrlError, NotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+_HTTP_ERRORS = {
+    404: ("NOT_FOUND", "Resource not found"),
+    405: ("METHOD_NOT_ALLOWED", "Method not allowed"),
+}
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -33,6 +40,17 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AliasTakenError)
     async def alias_taken(_: Request, exc: AliasTakenError) -> JSONResponse:
         return _error(409, "ALIAS_TAKEN", f"Alias '{exc}' is already in use")
+
+    @app.exception_handler(NotFoundError)
+    async def not_found(_: Request, exc: NotFoundError) -> JSONResponse:
+        return _error(404, "NOT_FOUND", f"No short link exists for '{exc}'")
+
+    # Framework-level HTTP errors (unknown path, wrong method) get the same envelope.
+    # This also covers any HTTPException a future route might raise.
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+        code, message = _HTTP_ERRORS.get(exc.status_code, ("HTTP_ERROR", str(exc.detail)))
+        return _error(exc.status_code, code, message)
 
     # Overrides FastAPI's default 422 body (a list of objects) so clients only ever
     # have to handle a single error shape.
