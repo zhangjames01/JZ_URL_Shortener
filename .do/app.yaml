@@ -1,0 +1,44 @@
+# DigitalOcean App Platform spec for the URL shortener.
+# Deploy and update instructions: docs/deployment.md
+name: url-shortener
+region: nyc
+
+services:
+  - name: web
+    # Build the image from the Dockerfile in this repository.
+    github:
+      repo: zhangjames01/JZ_URL_Shortener
+      branch: main
+      # Redeploy automatically on every push to main. Note that this does not wait for
+      # CI, so a push that fails CI still deploys. Set to false to deploy manually.
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    # Must match the port the container listens on (PORT defaults to 8080 in the image).
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    # Safe to increase: all instances share the same Postgres database.
+    instance_count: 1
+    health_check:
+      http_path: /healthz
+    envs:
+      # Connection string of the database declared below, injected at runtime.
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      # The app's public https:// URL, used to build the short links we return.
+      - key: BASE_URL
+        scope: RUN_TIME
+        value: ${APP_URL}
+      # DigitalOcean databases require TLS. libpq reads this variable, so the connection
+      # is encrypted whether or not the connection string above already says so.
+      - key: PGSSLMODE
+        scope: RUN_TIME
+        value: require
+
+databases:
+  - name: db
+    engine: PG
+    version: "17"
+    # A development database: single node and cheaper, but with no standby or backups
+    # guarantees. Use production: true with a managed cluster for a real launch.
+    production: false

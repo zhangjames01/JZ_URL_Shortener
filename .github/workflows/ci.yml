@@ -13,7 +13,7 @@ jobs:
     # A throwaway PostgreSQL for the Postgres repository tests.
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: url_shortener_test
