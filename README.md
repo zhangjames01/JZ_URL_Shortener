@@ -2,7 +2,7 @@
 
 A REST API that turns a long URL into a short link, redirects visitors to the original, and reports
 metadata and click statistics for every link. Built with Python 3.12 and FastAPI, developed
-test-first, and deployable to DigitalOcean.
+test-first, and deployable.
 
 [![CI](https://github.com/zhangjames01/JZ_URL_Shortener/actions/workflows/ci.yml/badge.svg)](https://github.com/zhangjames01/JZ_URL_Shortener/actions/workflows/ci.yml)
 
