@@ -205,7 +205,7 @@ tests/
   unit/                     rules, service, repository contract, configuration
   integration/              HTTP behaviour through the real app
 docs/                       architecture.md, deployment.md
-.do/app.yaml                DigitalOcean App Platform spec
+.do/app.yaml                App Platform spec
 .github/workflows/ci.yml    lint, format check and tests against Postgres 17
 Dockerfile
 ```
@@ -214,11 +214,6 @@ Dockerfile
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request:
 `ruff check`, `ruff format --check`, then `pytest` against a real PostgreSQL 17 service container.
-
-Deployment to DigitalOcean App Platform is described in [docs/deployment.md](docs/deployment.md) and
-configured in [`.do/app.yaml`](.do/app.yaml). The spec was written from DigitalOcean's documentation
-and could not be validated without an account token, so treat the first real deploy as its test.
-The app is set to redeploy on every push to `main`; that does not wait for CI.
 
 ## Known limitations
 
